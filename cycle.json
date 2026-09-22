@@ -33,7 +33,7 @@
             "PGHOST": "db",
             "PGPORT": "5432",
             "PGUSER": "demo",
-            "PGPASSWORD": "{{db_password}}",
+            "PGPASSWORD": "{{db-password}}",
             "PGDATABASE": "shop"
           }
         }
@@ -67,7 +67,7 @@
         "runtime": {
           "environment_vars": {
             "POSTGRES_USER": "demo",
-            "POSTGRES_PASSWORD": "{{db_password}}",
+            "POSTGRES_PASSWORD": "{{db-password}}",
             "POSTGRES_DB": "shop",
             "PGDATA": "/var/lib/postgresql/data/pgdata"
           }
