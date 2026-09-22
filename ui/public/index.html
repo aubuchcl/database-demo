@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Database Demo · Orders</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f9f9f7;
+      --surface: #fcfcfb;
+      --ink: #0b0b0b;
+      --ink-2: #52514e;
+      --muted: #898781;
+      --grid: #e1e0d9;
+      --baseline: #c3c2b7;
+      --border: rgba(11, 11, 11, 0.10);
+      --series-1: #2a78d6;
+      --up: #006300;
+      --down: #d03b3b;
+      --good: #0ca30c;
+      --critical: #d03b3b;
+      --accent: #2a78d6;
+      --accent-ink: #ffffff;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --page: #0d0d0d;
+        --surface: #1a1a19;
+        --ink: #ffffff;
+        --ink-2: #c3c2b7;
+        --muted: #898781;
+        --grid: #2c2c2a;
+        --baseline: #383835;
+        --border: rgba(255, 255, 255, 0.10);
+        --series-1: #3987e5;
+        --up: #0ca30c;
+        --down: #e66767;
+        --accent: #3987e5;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --series-1: #3987e5;
+      --up: #0ca30c;
+      --down: #e66767;
+      --accent: #3987e5;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1160px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+    h2 { margin: 0; font-size: 15px; font-weight: 600; }
+    .lede { margin: 4px 0 20px; color: var(--ink-2); max-width: 72ch; }
+    .mono { font-family: var(--mono); font-size: 12.5px; }
+    .muted { color: var(--muted); }
+    .sub { color: var(--ink-2); font-size: 13px; }
+
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    button {
+      font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: 8px 14px;
+      border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+    }
+    button.ghost { background: transparent; color: var(--accent); }
+    button:disabled { opacity: 0.6; cursor: progress; }
+    .status-line { font-size: 13px; color: var(--muted); }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; min-width: 0;
+    }
+    .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+    /* Connection strip */
+    .conn { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; padding: 0; margin-bottom: 16px; }
+    .conn > div { padding: 12px 16px; border-left: 1px solid var(--border); min-width: 0; }
+    .conn > div:first-child { border-left: 0; }
+    .conn .label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .conn .value { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+    .dot.ok { background: var(--good); }
+    .dot.bad { background: var(--critical); }
+
+    /* Stat tiles */
+    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+    .tile .label { font-size: 13px; color: var(--ink-2); }
+    .tile .value { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin: 2px 0; }
+    .tile .delta { font-size: 13px; color: var(--ink-2); }
+    .delta .up { color: var(--up); font-weight: 600; }
+    .delta .down { color: var(--down); font-weight: 600; }
+
+    /* Chart */
+    .chart-wrap { position: relative; }
+    .chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
+    .chart .bar { fill: var(--series-1); transition: opacity 0.12s; pointer-events: none; }
+    .chart .hit { fill: transparent; cursor: default; outline: none; }
+    .chart .hit:focus-visible + .bar, .chart .bar.hover { opacity: 0.72; }
+    .chart .gridline { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+    .chart .axis { stroke: var(--baseline); stroke-width: 1; shape-rendering: crispEdges; }
+    .chart text { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    .tooltip {
+      position: absolute; pointer-events: none; z-index: 2; display: none;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); white-space: nowrap;
+    }
+    .tooltip strong { display: block; font-size: 15px; }
+    .tooltip span { font-size: 12px; color: var(--ink-2); }
+    .refreshing { opacity: 0.55; transition: opacity 0.15s; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+    td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .table-scroll { overflow-x: auto; }
+
+    .grid2 { display: grid; grid-template-columns: 5fr 7fr; gap: 16px; margin-top: 16px; }
+
+    /* Top products */
+    .hbar-list { list-style: none; margin: 0; padding: 0; }
+    .hbar-list li { margin-bottom: 12px; }
+    .hbar-list li:last-child { margin-bottom: 0; }
+    .hbar-name { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
+    .hbar-name .cat { color: var(--muted); font-size: 12px; }
+    .hbar-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+    .hbar-track { flex: 1; min-width: 0; }
+    .hbar { height: 14px; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
+    .hbar-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
+
+    .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+    .status .dot.paid { background: var(--muted); }
+    .status .dot.shipped { background: var(--good); }
+    .status .dot.refunded { background: var(--critical); }
+    .new-row td { animation: flash 1.6s ease-out; }
+    @keyframes flash { from { background: rgba(57, 135, 229, 0.18); } to { background: transparent; } }
+    @media (prefers-reduced-motion: reduce) {
+      .new-row td { animation: none; }
+      .refreshing { transition: none; }
+    }
+
+    .banner { padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); margin-bottom: 16px; display: none; }
+    .banner.show { display: block; }
+
+    @media (max-width: 900px) {
+      .conn { grid-template-columns: 1fr 1fr; }
+      .conn > div:nth-child(3) { border-left: 0; }
+      .conn > div:nth-child(n+3) { border-top: 1px solid var(--border); }
+      .tiles { grid-template-columns: 1fr 1fr; }
+      .grid2 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .tile .value { font-size: 24px; }
+      .hide-sm { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Outpost Supply · Orders</h1>
+  <p class="lede">
+    A dashboard for a made-up outdoor-gear shop. The <strong>ui</strong> container is public. It queries
+    <strong>Postgres</strong> by hostname over the environment's private network, and the database has no public address.
+  </p>
+
+  <div class="toolbar">
+    <button id="simulate-btn">Simulate an order</button>
+    <button class="ghost" id="refresh-btn">Refresh</button>
+    <span class="status-line" id="status-line"></span>
+  </div>
+
+  <div class="banner" id="banner" role="status"></div>
+
+  <section class="card conn" aria-label="Database connection">
+    <div>
+      <div class="label"><span class="dot" id="conn-dot"></span>ui → db</div>
+      <div class="value" id="conn-resolved">–</div>
+    </div>
+    <div>
+      <div class="label">Database sees this ui as</div>
+      <div class="value" id="conn-client">–</div>
+    </div>
+    <div>
+      <div class="label">Postgres</div>
+      <div class="value" id="conn-version">–</div>
+    </div>
+    <div>
+      <div class="label">Round trip to db</div>
+      <div class="value" id="conn-latency">–</div>
+    </div>
+  </section>
+
+  <section class="tiles" id="tiles" aria-label="Last 30 days">
+    <div class="card tile"><div class="label">Revenue, last 30 days</div><div class="value" id="t-revenue">–</div><div class="delta" id="d-revenue"></div></div>
+    <div class="card tile"><div class="label">Orders, last 30 days</div><div class="value" id="t-orders">–</div><div class="delta" id="d-orders"></div></div>
+    <div class="card tile"><div class="label">Average order value</div><div class="value" id="t-aov">–</div><div class="delta" id="d-aov"></div></div>
+    <div class="card tile"><div class="label">Customers</div><div class="value" id="t-customers">–</div><div class="delta" id="d-customers"></div></div>
+  </section>
+
+  <section class="card" aria-labelledby="chart-title">
+    <div class="card-head">
+      <div>
+        <h2 id="chart-title">Daily revenue</h2>
+        <div class="sub">Last 30 days, UTC, excluding refunds</div>
+      </div>
+      <button class="ghost" id="table-toggle" aria-pressed="false">Show table</button>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart" id="chart"></div>
+      <div class="tooltip" id="tooltip"></div>
+      <div class="table-scroll" id="chart-table" hidden></div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>Top products</h2>
+          <div class="sub">By revenue, last 30 days</div>
+        </div>
+      </div>
+      <ul class="hbar-list" id="top-products"></ul>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>Recent orders</h2>
+          <div class="sub">Newest 10, straight from the <span class="mono">orders</span> table</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Order</th><th>Customer</th><th class="hide-sm">Placed</th><th class="num">Items</th><th class="num">Total</th><th>Status</th></tr>
+          </thead>
+          <tbody id="recent"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  let lastData = null;
+  let knownOrderIds = new Set();
+  let highlightNew = false;
+
+  function money(cents, compact) {
+    const dollars = Number(cents) / 100;
+    if (compact && Math.abs(dollars) >= 1000) {
+      return "$" + new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(dollars);
+    }
+    return dollars.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  function el(tag, props, children) {
+    const node = document.createElement(tag);
+    Object.assign(node, props || {});
+    for (const child of children || []) {
+      node.append(child);
+    }
+    return node;
+  }
+
+  function renderDelta(target, current, previous) {
+    target.replaceChildren();
+    if (!previous) {
+      return;
+    }
+    const change = (current - previous) / previous;
+    const pct = Math.abs(change * 100).toFixed(1) + "%";
+    let span;
+    if (change >= 0) {
+      span = el("span", { className: "up", textContent: "▲ " + pct });
+    } else {
+      span = el("span", { className: "down", textContent: "▼ " + pct });
+    }
+    target.append(span, " vs previous 30 days");
+  }
+
+  function renderTiles(s) {
+    const revenue = Number(s.revenue_30d);
+    const prevRevenue = Number(s.revenue_prev_30d);
+    $("t-revenue").textContent = money(revenue, true);
+    renderDelta($("d-revenue"), revenue, prevRevenue);
+
+    $("t-orders").textContent = s.orders_30d.toLocaleString("en-US");
+    renderDelta($("d-orders"), s.orders_30d, s.orders_prev_30d);
+
+    let aov = 0;
+    if (s.orders_30d > 0) {
+      aov = revenue / s.orders_30d;
+    }
+    let prevAov = 0;
+    if (s.orders_prev_30d > 0) {
+      prevAov = prevRevenue / s.orders_prev_30d;
+    }
+    $("t-aov").textContent = money(aov, false);
+    renderDelta($("d-aov"), aov, prevAov);
+
+    $("t-customers").textContent = s.customers.toLocaleString("en-US");
+    $("d-customers").textContent = `${s.new_customers_30d} joined in the last 30 days`;
+  }
+
+  function niceMax(value) {
+    if (value <= 0) {
+      return 1;
+    }
+    const exp = Math.pow(10, Math.floor(Math.log10(value)));
+    for (const step of [1, 2, 4, 6, 8, 10]) {
+      if (step * exp >= value) {
+        return step * exp;
+      }
+    }
+    return 10 * exp;
+  }
+
+  function shortDate(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  }
+
+  function renderChart(daily) {
+    const host = $("chart");
+    const width = Math.max(host.clientWidth, 280);
+    const height = 260;
+    const pad = { top: 8, right: 4, bottom: 24, left: 52 };
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+
+    const max = niceMax(Math.max(...daily.map((d) => Number(d.revenue))));
+    const band = plotW / daily.length;
+    const barW = Math.max(2, Math.min(24, band - 4));
+    const y = (v) => pad.top + plotH - (v / max) * plotH;
+
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Daily revenue for the last 30 days");
+
+    const ticks = 4;
+    for (let i = 0; i <= ticks; i++) {
+      const value = (max / ticks) * i;
+      const ty = Math.round(y(value)) + 0.5;
+      const line = document.createElementNS(SVG_NS, "line");
+      line.setAttribute("x1", pad.left);
+      line.setAttribute("x2", width - pad.right);
+      line.setAttribute("y1", ty);
+      line.setAttribute("y2", ty);
+      line.setAttribute("class", i === 0 ? "axis" : "gridline");
+      svg.append(line);
+      const label = document.createElementNS(SVG_NS, "text");
+      label.setAttribute("x", pad.left - 8);
+      label.setAttribute("y", ty + 4);
+      label.setAttribute("text-anchor", "end");
+      label.textContent = money(value, true);
+      svg.append(label);
+    }
+
+    const labelEvery = width < 520 ? 10 : 5;
+    daily.forEach((d, i) => {
+      const revenue = Number(d.revenue);
+      const cx = pad.left + band * i + band / 2;
+      const x = cx - barW / 2;
+      const top = y(revenue);
+      const h = pad.top + plotH - top;
+
+      const hit = document.createElementNS(SVG_NS, "rect");
+      hit.setAttribute("x", pad.left + band * i);
+      hit.setAttribute("y", pad.top);
+      hit.setAttribute("width", band);
+      hit.setAttribute("height", plotH);
+      hit.setAttribute("class", "hit");
+      hit.setAttribute("tabindex", "0");
+      hit.setAttribute("aria-label", `${shortDate(d.day)}: ${money(revenue, false)} from ${d.orders} orders`);
+
+      const bar = document.createElementNS(SVG_NS, "path");
+      bar.setAttribute("class", "bar");
+      if (h > 0) {
+        const r = Math.min(4, h, barW / 2);
+        const bottom = pad.top + plotH;
+        bar.setAttribute("d",
+          `M${x},${bottom} V${top + r} Q${x},${top} ${x + r},${top} H${x + barW - r} Q${x + barW},${top} ${x + barW},${top + r} V${bottom} Z`);
+      }
+
+      const show = () => {
+        bar.classList.add("hover");
+        showTooltip(d, cx, top);
+      };
+      const hide = () => {
+        bar.classList.remove("hover");
+        $("tooltip").style.display = "none";
+      };
+      hit.addEventListener("pointerenter", show);
+      hit.addEventListener("pointerleave", hide);
+      hit.addEventListener("focus", show);
+      hit.addEventListener("blur", hide);
+
+      svg.append(hit, bar);
+
+      const isLast = i === daily.length - 1;
+      if (i % labelEvery === 0 || isLast) {
+        const label = document.createElementNS(SVG_NS, "text");
+        label.setAttribute("x", cx);
+        label.setAttribute("y", height - 6);
+        label.setAttribute("text-anchor", isLast ? "end" : "middle");
+        if (isLast) {
+          label.setAttribute("x", Math.min(cx + band / 2, width - pad.right));
+        }
+        label.textContent = isLast ? "Today" : shortDate(d.day);
+        svg.append(label);
+      }
+    });
+
+    host.replaceChildren(svg);
+    renderChartTable(daily);
+  }
+
+  function showTooltip(d, cx, top) {
+    const tip = $("tooltip");
+    tip.replaceChildren(
+      el("strong", { textContent: money(d.revenue, false) }),
+      el("span", { textContent: `${shortDate(d.day)} · ${d.orders} orders` })
+    );
+    tip.style.display = "block";
+    const wrap = $("chart").getBoundingClientRect();
+    const tipW = tip.offsetWidth;
+    let left = cx - tipW / 2;
+    left = Math.max(0, Math.min(left, wrap.width - tipW));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(0, top - tip.offsetHeight - 10)}px`;
+  }
+
+  function renderChartTable(daily) {
+    const rows = daily.slice().reverse().map((d) => el("tr", {}, [
+      el("td", { textContent: shortDate(d.day) }),
+      el("td", { className: "num", textContent: String(d.orders) }),
+      el("td", { className: "num", textContent: money(d.revenue, false) }),
+    ]));
+    const table = el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { textContent: "Day (UTC)" }),
+        el("th", { className: "num", textContent: "Orders" }),
+        el("th", { className: "num", textContent: "Revenue" }),
+      ])]),
+      el("tbody", {}, rows),
+    ]);
+    $("chart-table").replaceChildren(table);
+  }
+
+  function renderTopProducts(products) {
+    const list = $("top-products");
+    list.replaceChildren();
+    if (products.length === 0) {
+      list.append(el("li", { className: "muted", textContent: "No sales in the last 30 days." }));
+      return;
+    }
+    const max = Math.max(...products.map((p) => Number(p.revenue)));
+    for (const p of products) {
+      const bar = el("div", { className: "hbar" });
+      bar.style.width = `${(Number(p.revenue) / max) * 100}%`;
+      list.append(el("li", {}, [
+        el("div", { className: "hbar-name" }, [
+          el("span", { textContent: p.name }),
+          el("span", { className: "cat", textContent: `${p.units} sold · ${p.category}` }),
+        ]),
+        el("div", { className: "hbar-row" }, [
+          el("div", { className: "hbar-track" }, [bar]),
+          el("span", { className: "hbar-value", textContent: money(p.revenue, true) }),
+        ]),
+      ]));
+    }
+  }
+
+  function timeAgo(iso) {
+    const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (seconds < 60) {
+      return "just now";
+    }
+    if (seconds < 3600) {
+      return `${Math.floor(seconds / 60)} min ago`;
+    }
+    if (seconds < 86400) {
+      return `${Math.floor(seconds / 3600)} h ago`;
+    }
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function renderRecent(orders) {
+    const body = $("recent");
+    body.replaceChildren();
+    for (const o of orders) {
+      const status = el("span", { className: "status" }, [
+        el("span", { className: `dot ${o.status}` }),
+        o.status.charAt(0).toUpperCase() + o.status.slice(1),
+      ]);
+      const row = el("tr", {}, [
+        el("td", { className: "mono", textContent: `#${o.id}` }),
+        el("td", {}, [o.customer, el("div", { className: "muted", style: "font-size:12px", textContent: o.city })]),
+        el("td", { className: "hide-sm muted", textContent: timeAgo(o.created_at) }),
+        el("td", { className: "num", textContent: String(o.items) }),
+        el("td", { className: "num", textContent: money(o.total, false) }),
+        el("td", {}, [status]),
+      ]);
+      if (highlightNew && !knownOrderIds.has(o.id)) {
+        row.className = "new-row";
+      }
+      body.append(row);
+    }
+    knownOrderIds = new Set(orders.map((o) => o.id));
+  }
+
+  function showBanner(text) {
+    const banner = $("banner");
+    if (!text) {
+      banner.classList.remove("show");
+      return;
+    }
+    banner.textContent = text;
+    banner.classList.add("show");
+  }
+
+  async function loadConnection() {
+    try {
+      const res = await fetch("/api/connection", { cache: "no-store" });
+      const c = await res.json();
+      const resolved = c.db.resolved;
+      const addrs = resolved.addresses.length ? resolved.addresses.join(", ") : `unresolved (${resolved.error})`;
+      $("conn-resolved").textContent = `${resolved.host} → ${addrs}`;
+      $("conn-dot").className = c.db.ok ? "dot ok" : "dot bad";
+      if (c.db.ok) {
+        $("conn-client").textContent = c.db.info.client_addr || "local socket";
+        $("conn-version").textContent = `${c.db.info.version.split(" ")[0]} · ${c.db.info.size} · ${c.db.info.orders.toLocaleString("en-US")} orders`;
+        $("conn-latency").textContent = `${c.db.info.latency_ms} ms`;
+      } else {
+        $("conn-client").textContent = "–";
+        $("conn-version").textContent = `unreachable: ${c.db.error}`;
+        $("conn-latency").textContent = "–";
+      }
+    } catch (err) {
+      $("conn-dot").className = "dot bad";
+      $("conn-resolved").textContent = "ui unreachable";
+    }
+  }
+
+  async function loadDashboard() {
+    const sections = [$("tiles"), $("chart"), $("top-products"), $("recent")];
+    for (const s of sections) {
+      s.classList.add("refreshing");
+    }
+    try {
+      const res = await fetch("/api/dashboard", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        showBanner(data.error || "Dashboard unavailable");
+        return false;
+      }
+      showBanner(null);
+      lastData = data;
+      renderTiles(data.summary);
+      renderChart(data.daily);
+      renderTopProducts(data.top_products);
+      renderRecent(data.recent_orders);
+      $("status-line").textContent = `Updated ${new Date().toLocaleTimeString()} · 4 queries in ${data.query_ms} ms`;
+      return true;
+    } catch (err) {
+      showBanner("Can't reach the ui container.");
+      return false;
+    } finally {
+      for (const s of sections) {
+        s.classList.remove("refreshing");
+      }
+    }
+  }
+
+  async function refreshAll() {
+    await Promise.all([loadDashboard(), loadConnection()]);
+  }
+
+  $("refresh-btn").addEventListener("click", refreshAll);
+
+  $("simulate-btn").addEventListener("click", async () => {
+    const btn = $("simulate-btn");
+    btn.disabled = true;
+    btn.textContent = "Placing order…";
+    try {
+      const res = await fetch("/api/orders/simulate", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(body.error || "Couldn't place an order.");
+      }
+      highlightNew = true;
+      await refreshAll();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Simulate an order";
+    }
+  });
+
+  $("table-toggle").addEventListener("click", () => {
+    const btn = $("table-toggle");
+    const showTable = btn.getAttribute("aria-pressed") !== "true";
+    btn.setAttribute("aria-pressed", String(showTable));
+    btn.textContent = showTable ? "Show chart" : "Show table";
+    $("chart").hidden = showTable;
+    $("chart-table").hidden = !showTable;
+  });
+
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (lastData) {
+        renderChart(lastData.daily);
+      }
+    }, 120);
+  });
+
+  // First load. If the database is still starting, keep retrying quietly.
+  async function boot() {
+    await loadConnection();
+    const ok = await loadDashboard();
+    if (!ok) {
+      setTimeout(boot, 3000);
+    }
+  }
+  boot();
+</script>
+</body>
+</html>

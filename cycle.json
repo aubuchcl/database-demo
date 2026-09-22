@@ -1,0 +1,86 @@
+{
+  "version": "1.0",
+  "about": {
+    "version": "1.0.0",
+    "description": "Database demo."
+  },
+  "containers": {
+    "ui": {
+      "name": "ui",
+      "stateful": false,
+      "image": {
+        "name": "database-demo-ui",
+        "origin": {
+          "type": "docker-file",
+          "details": {
+            "context_dir": "/ui",
+            "build_file": "/ui/Dockerfile"
+          }
+        }
+      },
+      "config": {
+        "network": {
+          "public": "enable",
+          "hostname": "ui",
+          "ports": ["80:8080"]
+        },
+        "deploy": {
+          "instances": 1
+        },
+        "runtime": {
+          "environment_vars": {
+            "PORT": "8080",
+            "PGHOST": "db",
+            "PGPORT": "5432",
+            "PGUSER": "demo",
+            "PGPASSWORD": "{{db_password}}",
+            "PGDATABASE": "shop"
+          }
+        }
+      }
+    },
+    "db": {
+      "name": "db",
+      "stateful": true,
+      "image": {
+        "name": "postgres",
+        "origin": {
+          "type": "docker-hub",
+          "details": {
+            "target": "postgres:17-alpine"
+          }
+        }
+      },
+      "config": {
+        "network": {
+          "public": "disable",
+          "hostname": "db"
+        },
+        "deploy": {
+          "instances": 1,
+          "stateful": {
+            "options": {
+              "use_base_hostname": true
+            }
+          }
+        },
+        "runtime": {
+          "environment_vars": {
+            "POSTGRES_USER": "demo",
+            "POSTGRES_PASSWORD": "{{db_password}}",
+            "POSTGRES_DB": "shop",
+            "PGDATA": "/var/lib/postgresql/data/pgdata"
+          }
+        }
+      },
+      "volumes": [
+        {
+          "destination": "/var/lib/postgresql/data",
+          "local": {
+            "max_size": "5G"
+          }
+        }
+      ]
+    }
+  }
+}
